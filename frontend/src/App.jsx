@@ -6,6 +6,10 @@ import SignUpPage from './pages/SignUpPage'
 import OnboardingPage from './pages/OnboardingPage'
 import SyncPage from './pages/SyncPage'
 import DashboardPage from './pages/DashboardPage'
+import VehicleRegistryPage from './pages/VehicleRegistryPage'
+import DriversPage from './pages/DriversPage'
+import TripsPage from './pages/TripsPage'
+import Layout from './components/Layout'
 
 function LoadingScreen() {
   return (
@@ -89,7 +93,16 @@ function App() {
               ) : !isOnboarded ? (
                 <Navigate to="/onboarding" replace />
               ) : (
-                <DashboardPage />
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/fleet" element={<VehicleRegistryPage />} />
+                    <Route path="/drivers" element={<DriversPage />} />
+                    <Route path="/trips" element={<TripsPage />} />
+                    {/* Fallback for other pages */}
+                    <Route path="*" element={<DashboardPage />} />
+                  </Routes>
+                </Layout>
               )}
             </Show>
           </>

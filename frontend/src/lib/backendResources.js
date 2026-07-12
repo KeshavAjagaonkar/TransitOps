@@ -102,8 +102,23 @@ export async function loadVehicles() {
   }
 }
 
+export async function getVehicle(vehicleId) {
+  const response = await api.get(`/vehicles/${vehicleId}`)
+  return response.data
+}
+
 export async function createVehicle(payload) {
   const response = await api.post('/vehicles', payload)
+  return response.data
+}
+
+export async function updateVehicle(vehicleId, payload) {
+  const response = await api.patch(`/vehicles/${vehicleId}`, payload)
+  return response.data
+}
+
+export async function deleteVehicle(vehicleId) {
+  const response = await api.delete(`/vehicles/${vehicleId}`)
   return response.data
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useUser } from '@clerk/react'
 import { z } from 'zod'
 import { canAccess, formatRole } from '../lib/roleAccess'
-import { loadVehicles, createVehicle, retireVehicle } from '../lib/backendResources'
+import { createVehicle, deleteVehicle, getVehicle, loadVehicles, updateVehicle } from '../lib/backendResources'
 import Modal from '../components/Modal'
 import { FormField, FieldClass } from '../components/FormField'
 import { useZodForm } from '../lib/useZodForm'
@@ -11,6 +11,18 @@ const VEHICLE_TYPES = ['Van', 'Truck', 'Mini']
 // These must match the *labels* normalizeVehicle actually produces
 // (spaced strings), since that's what row.status contains after loadVehicles().
 const STATUS_LABELS = ['Available', 'On Trip', 'In Shop', 'Retired']
+const STATUS_TO_API = {
+  Available: 'Available',
+  'On Trip': 'OnTrip',
+  'In Shop': 'InShop',
+  Retired: 'Retired',
+}
+const STATUS_FROM_API = {
+  Available: 'Available',
+  OnTrip: 'On Trip',
+  InShop: 'In Shop',
+  Retired: 'Retired',
+}
 
 const vehicleSchema = z.object({
   regNo: z.string().trim().min(1, 'Registration number is required')
@@ -34,7 +46,8 @@ export default function VehicleRegistryPage() {
   const { user } = useUser()
   const role = user?.publicMetadata?.role
   const canCreateVehicle = canAccess(role, 'canCreateVehicle')
-  const canRetireVehicle = canAccess(role, 'canRetireVehicle')
+  const canUpdateVehicle = canAccess(role, 'canUpdateVehicle')
+  const canDeleteVehicle = canAccess(role, 'canDeleteVehicle')
 
   const [filterType, setFilterType] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
@@ -43,6 +56,12 @@ export default function VehicleRegistryPage() {
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [detailVehicle, setDetailVehicle] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
+  const [editVehicle, setEditVehicle] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [editSubmitting, setEditSubmitting] = useState(false)
 
   const { values: draft, updateField, fieldErrors, formError, submitting, handleSubmit, reset } =
     useZodForm(vehicleSchema, emptyDraft)
@@ -80,19 +99,75 @@ export default function VehicleRegistryPage() {
 
   const openForm = () => { reset(); setShowForm(true) }
 
+  const openVehicleDetail = async (vehicleId) => {
+    setDetailVehicle(null)
+    setDetailError('')
+    setDetailLoading(true)
+    try {
+      const vehicle = await getVehicle(vehicleId)
+      setDetailVehicle(vehicle)
+    } catch (err) {
+      setDetailError(err.response?.data?.error || 'Failed to load vehicle details.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const openVehicleEdit = async (vehicleId) => {
+    setEditError('')
+    setDetailError('')
+    try {
+      const vehicle = await getVehicle(vehicleId)
+      setEditVehicle({
+        ...vehicle,
+        status: STATUS_FROM_API[vehicle.status] ?? vehicle.status ?? 'Available',
+        maxCapacityKg: vehicle.maxCapacityKg ?? '',
+        odometer: vehicle.odometer ?? '',
+        acquisitionCost: vehicle.acquisitionCost ?? '',
+        region: vehicle.region ?? '',
+      })
+    } catch (err) {
+      setEditError(err.response?.data?.error || 'Failed to load vehicle for editing.')
+    }
+  }
+
   const onSubmit = handleSubmit(async (data) => {
     await createVehicle(data)
     setShowForm(false)
     await refreshVehicles()
   })
 
-  const onRetire = async (id) => {
-    if (!window.confirm('Are you sure you want to retire this vehicle?')) return
+  const onUpdateVehicle = async () => {
+    if (!editVehicle) return
+    setEditSubmitting(true)
+    setEditError('')
     try {
-      await retireVehicle(id)
+      await updateVehicle(editVehicle.id, {
+        regNo: editVehicle.regNo,
+        nameModel: editVehicle.nameModel,
+        type: editVehicle.type,
+        maxCapacityKg: Number(editVehicle.maxCapacityKg),
+        odometer: Number(editVehicle.odometer),
+        acquisitionCost: Number(editVehicle.acquisitionCost),
+        region: editVehicle.region || null,
+        status: STATUS_TO_API[editVehicle.status] ?? editVehicle.status,
+      })
+      setEditVehicle(null)
       await refreshVehicles()
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to retire vehicle.')
+      setEditError(err.response?.data?.error || 'Failed to update vehicle.')
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  const onDeleteVehicle = async (vehicleId) => {
+    if (!window.confirm('Are you sure you want to delete this vehicle?')) return
+    try {
+      await deleteVehicle(vehicleId)
+      await refreshVehicles()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to delete vehicle.')
     }
   }
 
@@ -180,14 +255,30 @@ export default function VehicleRegistryPage() {
                     </span>
                   </td>
                   <td className="py-4 text-right">
-                    {canRetireVehicle && row.status !== 'Retired' ? (
-                      <button onClick={() => onRetire(row.id)}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all cursor-pointer">
-                        Retire
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => openVehicleDetail(row.id)}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-gray-800/80 border border-gray-700 text-gray-200 hover:bg-gray-700 transition-all cursor-pointer"
+                      >
+                        View
                       </button>
-                    ) : (
-                      <span className="text-xs text-gray-500 italic">No actions</span>
-                    )}
+                      {canUpdateVehicle && row.status !== 'Retired' && (
+                        <button
+                          onClick={() => openVehicleEdit(row.id)}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-white transition-all cursor-pointer"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canDeleteVehicle && (
+                        <button
+                          onClick={() => onDeleteVehicle(row.id)}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -258,6 +349,75 @@ export default function VehicleRegistryPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={Boolean(detailVehicle) || detailLoading || Boolean(detailError)} onClose={() => { setDetailVehicle(null); setDetailError('') }} title="Vehicle Details">
+        {detailLoading ? (
+          <p className="text-sm text-gray-400">Loading vehicle details...</p>
+        ) : detailError ? (
+          <p className="text-sm text-red-400">{detailError}</p>
+        ) : detailVehicle ? (
+          <div className="space-y-3 text-sm text-gray-300">
+            <div><span className="text-gray-500">Reg. No.</span> {detailVehicle.regNo}</div>
+            <div><span className="text-gray-500">Name/Model.</span> {detailVehicle.nameModel}</div>
+            <div><span className="text-gray-500">Type.</span> {detailVehicle.type}</div>
+            <div><span className="text-gray-500">Capacity.</span> {detailVehicle.maxCapacityKg ?? detailVehicle.capacity}</div>
+            <div><span className="text-gray-500">Odometer.</span> {detailVehicle.odometer}</div>
+            <div><span className="text-gray-500">Acquisition Cost.</span> {detailVehicle.acquisitionCost}</div>
+            <div><span className="text-gray-500">Region.</span> {detailVehicle.region || '—'}</div>
+            <div><span className="text-gray-500">Status.</span> {detailVehicle.status}</div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(editVehicle)} onClose={() => setEditVehicle(null)} title="Edit Vehicle">
+        {editVehicle && (
+          <div className="space-y-4">
+            {editError && (
+              <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20 text-red-300 text-sm">
+                {editError}
+              </div>
+            )}
+            <FormField label="Registration number">
+              <input value={editVehicle.regNo} onChange={(e) => setEditVehicle({ ...editVehicle, regNo: e.target.value.toUpperCase() })} className={FieldClass(false)} />
+            </FormField>
+            <FormField label="Name / model">
+              <input value={editVehicle.nameModel} onChange={(e) => setEditVehicle({ ...editVehicle, nameModel: e.target.value })} className={FieldClass(false)} />
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Type">
+                <select value={editVehicle.type} onChange={(e) => setEditVehicle({ ...editVehicle, type: e.target.value })} className={FieldClass(false)}>
+                  {VEHICLE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Status">
+                <select value={editVehicle.status} onChange={(e) => setEditVehicle({ ...editVehicle, status: e.target.value })} className={FieldClass(false)}>
+                  {STATUS_LABELS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </FormField>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <FormField label="Capacity (kg)">
+                <input value={editVehicle.maxCapacityKg} onChange={(e) => setEditVehicle({ ...editVehicle, maxCapacityKg: e.target.value })} className={FieldClass(false)} />
+              </FormField>
+              <FormField label="Odometer (km)">
+                <input value={editVehicle.odometer} onChange={(e) => setEditVehicle({ ...editVehicle, odometer: e.target.value })} className={FieldClass(false)} />
+              </FormField>
+              <FormField label="Acq. cost (₹)">
+                <input value={editVehicle.acquisitionCost} onChange={(e) => setEditVehicle({ ...editVehicle, acquisitionCost: e.target.value })} className={FieldClass(false)} />
+              </FormField>
+            </div>
+            <FormField label="Region">
+              <input value={editVehicle.region || ''} onChange={(e) => setEditVehicle({ ...editVehicle, region: e.target.value })} className={FieldClass(false)} />
+            </FormField>
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setEditVehicle(null)} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-400 hover:text-white transition-colors cursor-pointer">Cancel</button>
+              <button type="button" onClick={onUpdateVehicle} disabled={editSubmitting} className="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all cursor-pointer">
+                {editSubmitting ? 'Updating...' : 'Update Vehicle'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

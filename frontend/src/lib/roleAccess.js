@@ -4,6 +4,8 @@ const ROLE_CONFIG = {
     homePath: '/fleet',
     permissions: {
       canCreateVehicle: true,
+      canUpdateVehicle: true,
+      canDeleteVehicle: true,
       canCreateDriver: true,
       canCreateTrip: true,
       canManageDriverStatus: true,
@@ -17,6 +19,8 @@ const ROLE_CONFIG = {
     homePath: '/trips',
     permissions: {
       canCreateVehicle: false,
+      canUpdateVehicle: false,
+      canDeleteVehicle: false,
       canCreateDriver: false,
       canCreateTrip: true,
       canManageDriverStatus: false,
@@ -30,6 +34,8 @@ const ROLE_CONFIG = {
     homePath: '/drivers',
     permissions: {
       canCreateVehicle: false,
+      canUpdateVehicle: false,
+      canDeleteVehicle: false,
       canCreateDriver: false,
       canCreateTrip: false,
       canManageDriverStatus: true,
@@ -43,6 +49,8 @@ const ROLE_CONFIG = {
     homePath: '/dashboard',
     permissions: {
       canCreateVehicle: false,
+      canUpdateVehicle: false,
+      canDeleteVehicle: false,
       canCreateDriver: false,
       canCreateTrip: false,
       canManageDriverStatus: false,

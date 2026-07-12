@@ -1,4 +1,5 @@
 import { UserButton, useUser } from '@clerk/react'
+import { formatRole } from '../lib/roleAccess'
 
 export default function Navbar() {
     const { user } = useUser()
@@ -11,11 +12,7 @@ export default function Navbar() {
             .toUpperCase()
         : 'U'
 
-    // Format role for user display (e.g. FleetManager -> Fleet Manager)
-    const rawRole = user?.publicMetadata?.role || 'Dispatcher'
-    const roleDisplay = typeof rawRole === 'string'
-        ? rawRole.replace(/([A-Z])/g, ' $1').trim()
-        : 'Dispatcher'
+    const roleDisplay = formatRole(user?.publicMetadata?.role)
 
     return (
         <header className="h-16 border-b border-gray-900 bg-gray-950/80 backdrop-blur-xl flex items-center justify-between px-8 sticky top-0 z-40 select-none">

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useUser } from '@clerk/react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/axiosInstance'
+import { getRoleHomePath, formatRole } from '../lib/roleAccess'
 
 const ROLES = [
   {
@@ -71,7 +72,7 @@ export default function OnboardingPage() {
         role: selected,
         name: user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' '),
       })
-      navigate('/', { replace: true })
+      navigate(getRoleHomePath(selected), { replace: true })
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Please try again.')
       setLoading(false)
@@ -129,7 +130,7 @@ export default function OnboardingPage() {
                 </span>
               </div>
               <h3 className={`font-semibold text-lg mb-1 ${selected === role.value ? 'text-white' : 'text-white'}`}>
-                {role.label}
+                {formatRole(role.value)}
               </h3>
               <p className={`text-sm leading-relaxed ${selected === role.value ? 'text-white/80' : 'text-gray-400'}`}>
                 {role.description}

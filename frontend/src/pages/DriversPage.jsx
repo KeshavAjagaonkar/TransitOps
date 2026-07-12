@@ -1,21 +1,127 @@
-import { useState } from 'react'
-
-const DRIVERS = [
-  { name: 'Alex', licenseNo: 'DL-88213', category: 'LMV', expiry: '12/2028', expiryClass: 'text-gray-400', contact: '98765xxxxx', completion: '96%', safety: 'Available', safetyColor: 'bg-green-500/15 text-green-400 border-green-500/20', status: 'Available', statusColor: 'bg-green-500/15 text-green-400 border-green-500/20' },
-  { name: 'John', licenseNo: 'DL-44120', category: 'HMV', expiry: '03/2025 EXPIRED', expiryClass: 'text-red-400 font-semibold', contact: '98220xxxxx', completion: '81%', safety: 'Suspended', safetyColor: 'bg-amber-500/15 text-amber-400 border-amber-500/20', status: 'Suspended', statusColor: 'bg-amber-500/15 text-amber-400 border-amber-500/20' },
-  { name: 'Priya', licenseNo: 'DL-77031', category: 'LMV', expiry: '08/2026', expiryClass: 'text-gray-400', contact: '99110xxxxx', completion: '99%', safety: 'On Trip', safetyColor: 'bg-blue-500/15 text-blue-400 border-blue-500/20', status: 'On Trip', statusColor: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
-  { name: 'Suresh', licenseNo: 'DL-90045', category: 'HMV', expiry: '01/2027', expiryClass: 'text-gray-400', contact: '97440xxxxx', completion: '88%', safety: 'Available', safetyColor: 'bg-green-500/15 text-green-400 border-green-500/20', status: 'Off Duty', statusColor: 'bg-gray-500/15 text-gray-400 border-gray-500/20' },
-]
+import { useEffect, useMemo, useState } from 'react'
+import { useUser } from '@clerk/react'
+import { canAccess, formatRole } from '../lib/roleAccess'
+import { createDriver, loadDrivers, normalizeDriver, updateDriverStatus as updateDriverStatusRequest } from '../lib/backendResources'
 
 export default function DriversPage() {
+  const { user } = useUser()
+  const role = user?.publicMetadata?.role
   const [selectedDriver, setSelectedDriver] = useState(null)
+  const [drivers, setDrivers] = useState([])
+  const [showForm, setShowForm] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [draft, setDraft] = useState({
+    name: '',
+    licenseNo: '',
+    category: 'LMV',
+    expiry: '12/2028',
+    contact: '98xxxxx',
+  })
+
+  const canCreateDriver = canAccess(role, 'canCreateDriver')
+  const canManageDriverStatus = canAccess(role, 'canManageDriverStatus')
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadDrivers()
+      .then((items) => {
+        if (!cancelled) {
+          setDrivers(items)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const visibleDrivers = useMemo(() => drivers, [drivers])
+
+  const handleCreateDriver = async (event) => {
+    event.preventDefault()
+
+    if (!canCreateDriver) return
+
+    setError('')
+
+    const payload = {
+      name: draft.name,
+      licenseNo: draft.licenseNo,
+      licenseCategory: draft.category,
+      licenseExpiry: draft.expiry,
+      contact: draft.contact,
+    }
+
+    try {
+      const created = await createDriver(payload)
+      setDrivers((current) => [normalizeDriver(created), ...current])
+    } catch (err) {
+      setError(err.response?.data?.error || 'Unable to save the driver to the backend.')
+    } finally {
+      setDraft({ name: '', licenseNo: '', category: 'LMV', expiry: '12/2028', contact: '98xxxxx' })
+      setShowForm(false)
+    }
+  }
+
+  const handleUpdateDriverStatus = async (status) => {
+    if (!selectedDriver || !canManageDriverStatus) return
+
+    setError('')
+
+    try {
+      await updateDriverStatusRequest(selectedDriver.id || selectedDriver.name, status)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Unable to update driver status in the backend.')
+      return
+    }
+
+    setDrivers((current) => current.map((driver) => {
+      if (driver.name !== selectedDriver.name) return driver
+
+      const statusColor =
+        status === 'Available'
+          ? 'bg-green-500/15 text-green-400 border-green-500/20'
+          : status === 'On Trip'
+            ? 'bg-blue-500/15 text-blue-400 border-blue-500/20'
+            : status === 'Suspended'
+              ? 'bg-amber-500/15 text-amber-400 border-amber-500/20'
+              : 'bg-gray-500/15 text-gray-400 border-gray-500/20'
+
+      return {
+        ...driver,
+        status,
+        statusColor,
+        safety: status,
+        safetyColor: statusColor,
+      }
+    }))
+
+    setSelectedDriver((current) => current ? { ...current, status, safety: status } : current)
+  }
 
   return (
     <div className="space-y-6 select-none">
       {/* Title & Actions Row */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white tracking-tight">Drivers & Safety Profiles</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Drivers & Safety Profiles</h1>
+          <p className="text-xs text-gray-500 mt-1">{formatRole(role)} workspace</p>
+        </div>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-300 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Filter & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gray-900/40 p-4 rounded-xl border border-gray-900/60">
@@ -35,14 +141,31 @@ export default function DriversPage() {
           </div>
         </div>
 
-        {/* Add Driver Button */}
-        <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20 hover:shadow-amber-500/20 transition-all duration-150 cursor-pointer">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add Driver
-        </button>
+        {canCreateDriver && (
+          <button onClick={() => setShowForm((current) => !current)} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20 hover:shadow-amber-500/20 transition-all duration-150 cursor-pointer">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            {showForm ? 'Close Form' : 'Add Driver'}
+          </button>
+        )}
       </div>
+
+      {showForm && canCreateDriver && (
+        <form onSubmit={handleCreateDriver} className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm">
+          <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Driver name" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <input value={draft.licenseNo} onChange={(event) => setDraft({ ...draft, licenseNo: event.target.value })} placeholder="License number" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+            <option value="LMV">LMV</option>
+            <option value="HMV">HMV</option>
+          </select>
+          <input value={draft.expiry} onChange={(event) => setDraft({ ...draft, expiry: event.target.value })} placeholder="Expiry" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <input value={draft.contact} onChange={(event) => setDraft({ ...draft, contact: event.target.value })} placeholder="Contact" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <button type="submit" className="md:col-span-5 justify-self-start px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white transition-all duration-150 cursor-pointer">
+            Save Driver
+          </button>
+        </form>
+      )}
 
       {/* Master Driver Table */}
       <div className="bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm">
@@ -61,9 +184,17 @@ export default function DriversPage() {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-gray-800/40">
-              {DRIVERS.map((row) => (
+              {loading ? (
+                <tr>
+                  <td className="py-6 text-gray-500" colSpan={8}>Loading drivers from the backend...</td>
+                </tr>
+              ) : visibleDrivers.length === 0 ? (
+                <tr>
+                  <td className="py-6 text-gray-500" colSpan={8}>No drivers found.</td>
+                </tr>
+              ) : visibleDrivers.map((row) => (
                 <tr
-                  key={row.name}
+                  key={row.id || row.name}
                   onClick={() => setSelectedDriver(row)}
                   className={`hover:bg-gray-900/30 cursor-pointer transition-all duration-150 ${selectedDriver?.name === row.name ? 'bg-indigo-600/5' : ''}`}
                 >
@@ -102,16 +233,16 @@ export default function DriversPage() {
             Toggle Status for: <span className="text-white normal-case">{selectedDriver.name}</span>
           </p>
           <div className="flex flex-wrap gap-3">
-            <button className="px-4 py-2 rounded-xl text-xs font-bold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500 hover:text-white transition-all duration-150 cursor-pointer">
+            <button onClick={() => handleUpdateDriverStatus('Available')} disabled={!canManageDriverStatus} className="px-4 py-2 rounded-xl text-xs font-bold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500 hover:text-white transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               Available
             </button>
-            <button className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white transition-all duration-150 cursor-pointer">
+            <button onClick={() => handleUpdateDriverStatus('On Trip')} disabled={!canManageDriverStatus} className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               On Trip
             </button>
-            <button className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-500/15 border border-gray-500/30 text-gray-400 hover:bg-gray-500 hover:text-white transition-all duration-150 cursor-pointer">
+            <button onClick={() => handleUpdateDriverStatus('Off Duty')} disabled={!canManageDriverStatus} className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-500/15 border border-gray-500/30 text-gray-400 hover:bg-gray-500 hover:text-white transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               Off Duty
             </button>
-            <button className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-white transition-all duration-150 cursor-pointer">
+            <button onClick={() => handleUpdateDriverStatus('Suspended')} disabled={!canManageDriverStatus} className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-white transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
               Suspended
             </button>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/axiosInstance'
+import { getRoleHomePath } from '../lib/roleAccess'
 
 export default function SyncPage() {
   const { isLoaded, user } = useUser()
@@ -20,7 +21,7 @@ export default function SyncPage() {
         const resolvedRole = response.data?.role
 
         if (!cancelled) {
-          navigate(resolvedRole ? '/' : '/onboarding', { replace: true })
+          navigate(resolvedRole ? getRoleHomePath(resolvedRole) : '/onboarding', { replace: true })
         }
       } catch (err) {
         if (cancelled) return

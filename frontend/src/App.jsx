@@ -10,6 +10,7 @@ import VehicleRegistryPage from './pages/VehicleRegistryPage'
 import DriversPage from './pages/DriversPage'
 import TripsPage from './pages/TripsPage'
 import Layout from './components/Layout'
+import { getRoleHomePath } from './lib/roleAccess'
 
 function LoadingScreen() {
   return (
@@ -26,7 +27,9 @@ function App() {
   // Straight off Clerk's own hook — no wrapper needed. Role lives in
   // publicMetadata (set once, at onboarding, via POST /api/user/sync).
   const { isLoaded, user } = useUser()
-  const isOnboarded = Boolean(user?.publicMetadata?.role)
+  const role = user?.publicMetadata?.role
+  const isOnboarded = Boolean(role)
+  const roleHomePath = getRoleHomePath(role)
 
   return (
     <Routes>
@@ -35,7 +38,7 @@ function App() {
         path="/sign-in"
         element={
           <>
-            <Show when="signed-in"><Navigate to="/" replace /></Show>
+            <Show when="signed-in"><Navigate to={isOnboarded ? roleHomePath : '/onboarding'} replace /></Show>
             <Show when="signed-out"><SignInPage /></Show>
           </>
         }
@@ -44,7 +47,7 @@ function App() {
         path="/sign-up"
         element={
           <>
-            <Show when="signed-in"><Navigate to="/" replace /></Show>
+            <Show when="signed-in"><Navigate to={isOnboarded ? roleHomePath : '/onboarding'} replace /></Show>
             <Show when="signed-out"><SignUpPage /></Show>
           </>
         }
@@ -60,7 +63,7 @@ function App() {
               {!isLoaded ? (
                 <LoadingScreen />
               ) : isOnboarded ? (
-                <Navigate to="/" replace />
+                <Navigate to={roleHomePath} replace />
               ) : (
                 <OnboardingPage />
               )}

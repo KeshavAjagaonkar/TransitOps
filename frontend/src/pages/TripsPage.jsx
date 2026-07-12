@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useUser } from '@clerk/react'
+import { canAccess, formatRole } from '../lib/roleAccess'
+import { createTrip, dispatchTrip, loadTrips, normalizeTrip } from '../lib/backendResources'
 
 const AVAILABLE_VEHICLES = [
   { id: 'v1', name: 'VAN-05', capacity: 500 },
@@ -12,30 +15,84 @@ const AVAILABLE_DRIVERS = [
   { id: 'd3', name: 'Suresh' },
 ]
 
-const LIVE_TRIPS = [
-  { code: 'TR001', route: 'Gandhinagar Depot ➔ Ahmedabad Hub', vehicleDriver: 'VAN-05 / ALEX', status: 'Dispatched', statusClass: 'bg-blue-500/15 text-blue-400 border-blue-500/20', detail: '45 min' },
-  { code: 'TR004', route: 'Vatva Industrial Area ➔ Sanand Warehouse', vehicleDriver: 'TRUCK-04 / SURESH', status: 'Draft', statusClass: 'bg-gray-500/15 text-gray-400 border-gray-500/20', detail: 'Awaiting driver' },
-  { code: 'TR006', route: 'Mansa ➔ Kalol Depot', vehicleDriver: 'Unassigned', status: 'Cancelled', statusClass: 'bg-red-500/15 text-red-400 border-red-500/20', detail: 'Vehicle went to shop' },
-]
-
 export default function TripsPage() {
+  const { user } = useUser()
+  const role = user?.publicMetadata?.role
   const [source, setSource] = useState('Gandhinagar Depot')
   const [destination, setDestination] = useState('Ahmedabad Hub')
   const [selectedVehicle, setSelectedVehicle] = useState('v1')
   const [selectedDriver, setSelectedDriver] = useState('d1')
   const [cargoWeight, setCargoWeight] = useState(700)
   const [distance, setDistance] = useState(38)
+  const [liveTrips, setLiveTrips] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const activeVehicleObj = AVAILABLE_VEHICLES.find((v) => v.id === selectedVehicle)
   const isOverweight = activeVehicleObj ? cargoWeight > activeVehicleObj.capacity : false
   const overweightDiff = activeVehicleObj ? cargoWeight - activeVehicleObj.capacity : 0
+  const canCreateTrip = canAccess(role, 'canCreateTrip')
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadTrips()
+      .then((items) => {
+        if (!cancelled) {
+          setLiveTrips(items)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const visibleTrips = useMemo(() => liveTrips, [liveTrips])
+
+  const handleDispatch = async () => {
+    if (!canCreateTrip || isOverweight) return
+
+    setError('')
+
+    const payload = {
+      source,
+      destination,
+      cargoWeightKg: cargoWeight,
+      plannedDistanceKm: distance,
+      vehicleId: selectedVehicle,
+      driverId: selectedDriver,
+    }
+
+    try {
+      const created = await createTrip(payload)
+      const trip = normalizeTrip(created)
+      setLiveTrips((current) => [trip, ...current])
+      await dispatchTrip(created.id || created.tripCode)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Unable to save the trip to the backend.')
+    }
+  }
 
   return (
     <div className="space-y-6 select-none">
       {/* Title Header */}
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight">Trip Dispatcher</h1>
+        <p className="text-xs text-gray-500 mt-1">{formatRole(role)} workspace</p>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-300 text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
         {/* Left Column: Create Trip Form */}
@@ -82,7 +139,7 @@ export default function TripsPage() {
 
             {/* Create Trip Form */}
             <div className="space-y-4">
-              <h2 className="text-md font-bold text-white uppercase tracking-wider text-xs text-gray-400">Create Trip</h2>
+              <h2 className="text-md font-bold uppercase tracking-wider text-xs text-gray-400">Create Trip</h2>
 
               {/* Source */}
               <div className="space-y-1.5">
@@ -174,16 +231,17 @@ export default function TripsPage() {
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-4 pt-2">
                 <button
+                  onClick={handleDispatch}
                   disabled={isOverweight}
                   className={`
                     w-full py-3 rounded-xl font-bold text-sm text-center transition-all duration-150
-                    ${isOverweight
+                    ${!canCreateTrip || isOverweight
                       ? 'bg-gray-800/30 text-gray-600 border border-gray-800/40 cursor-not-allowed'
                       : 'bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/20 cursor-pointer'
                     }
                   `}
                 >
-                  Dispatch
+                  {canCreateTrip ? 'Dispatch' : 'View Only'}
                 </button>
                 <button className="w-full py-3 rounded-xl font-bold text-sm text-gray-400 border border-gray-800 bg-transparent hover:bg-gray-900 transition-all duration-150 cursor-pointer">
                   Cancel
@@ -197,12 +255,16 @@ export default function TripsPage() {
 
         {/* Right Column: Live Board */}
         <div className="xl:col-span-3 space-y-6">
-          <div className="bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm space-y-6 flex flex-col justify-between min-h-[500px]">
+          <div className="bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm space-y-6 flex flex-col justify-between min-h-125">
             <div>
-              <h2 className="text-md font-bold text-white uppercase tracking-wider text-xs text-gray-400 mb-6">Live Board</h2>
+              <h2 className="text-md font-bold uppercase tracking-wider text-xs text-gray-400 mb-6">Live Board</h2>
               
               <div className="space-y-4">
-                {LIVE_TRIPS.map((trip) => (
+                {loading ? (
+                  <div className="py-6 text-gray-500">Loading trips from the backend...</div>
+                ) : visibleTrips.length === 0 ? (
+                  <div className="py-6 text-gray-500">No trips found.</div>
+                ) : visibleTrips.map((trip) => (
                   <div
                     key={trip.code}
                     className="p-5 bg-gray-950 border border-gray-900/60 rounded-2xl flex items-center justify-between hover:border-gray-800 transition-all duration-150"

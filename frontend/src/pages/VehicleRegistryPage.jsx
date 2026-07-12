@@ -1,23 +1,102 @@
-import { useState } from 'react'
-
-const VEHICLES = [
-  { regNo: 'GJ01AB4521', nameModel: 'VAN-05', type: 'Van', capacity: '500 kg', odometer: '74,000', acqCost: '6,20,000', status: 'Available', statusColor: 'bg-green-500/15 text-green-400 border-green-500/20' },
-  { regNo: 'GJ01AB9981', nameModel: 'TRUCK-11', type: 'Truck', capacity: '5 Ton', odometer: '182,000', acqCost: '24,50,000', status: 'On Trip', statusColor: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
-  { regNo: 'GJ01AB1120', nameModel: 'MINI-03', type: 'Mini', capacity: '1 Ton', odometer: '66,000', acqCost: '4,10,000', status: 'In Shop', statusColor: 'bg-amber-500/15 text-amber-400 border-amber-500/20' },
-  { regNo: 'GJ01AB0081', nameModel: 'VAN-09', type: 'Van', capacity: '750 kg', odometer: '241,900', acqCost: '5,90,000', status: 'Retired', statusColor: 'bg-red-500/15 text-red-400 border-red-500/20' },
-]
+import { useEffect, useMemo, useState } from 'react'
+import { useUser } from '@clerk/react'
+import { canAccess, formatRole } from '../lib/roleAccess'
+import { createVehicle, loadVehicles, normalizeVehicle } from '../lib/backendResources'
 
 export default function VehicleRegistryPage() {
+  const { user } = useUser()
+  const role = user?.publicMetadata?.role
   const [filterType, setFilterType] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
   const [searchReg, setSearchReg] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [vehicles, setVehicles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [draft, setDraft] = useState({
+    regNo: '',
+    nameModel: '',
+    type: 'Van',
+    capacity: '500 kg',
+    odometer: '0',
+    acqCost: '0',
+  })
+
+  const canCreateVehicle = canAccess(role, 'canCreateVehicle')
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadVehicles()
+      .then((items) => {
+        if (!cancelled) {
+          setVehicles(items)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const visibleVehicles = useMemo(() => {
+    return vehicles.filter((vehicle) => {
+      const matchesType = filterType === 'All' || vehicle.type === filterType
+      const matchesStatus = filterStatus === 'All' || vehicle.status === filterStatus
+      const matchesSearch = searchReg.trim() === '' || vehicle.regNo.toLowerCase().includes(searchReg.toLowerCase())
+
+      return matchesType && matchesStatus && matchesSearch
+    })
+  }, [filterStatus, filterType, searchReg, vehicles])
+
+  const handleCreateVehicle = async (event) => {
+    event.preventDefault()
+
+    if (!canCreateVehicle) return
+
+    setError('')
+
+    const payload = {
+      regNo: draft.regNo,
+      nameModel: draft.nameModel,
+      type: draft.type,
+      maxCapacityKg: Number.parseFloat(draft.capacity),
+      odometer: Number.parseFloat(draft.odometer),
+      acquisitionCost: Number.parseFloat(draft.acqCost),
+    }
+
+    try {
+      const created = await createVehicle(payload)
+      setVehicles((current) => [normalizeVehicle(created), ...current])
+    } catch (err) {
+      setError(err.response?.data?.error || 'Unable to save the vehicle to the backend.')
+    } finally {
+      setDraft({ regNo: '', nameModel: '', type: 'Van', capacity: '500 kg', odometer: '0', acqCost: '0' })
+      setShowForm(false)
+    }
+  }
 
   return (
     <div className="space-y-6 select-none">
       {/* Title & Actions Row */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white tracking-tight">Vehicle Registry</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Vehicle Registry</h1>
+          <p className="text-xs text-gray-500 mt-1">{formatRole(role)} workspace</p>
+        </div>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-300 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gray-900/40 p-4 rounded-xl border border-gray-900/60">
@@ -64,14 +143,36 @@ export default function VehicleRegistryPage() {
           </div>
         </div>
 
-        {/* Add Vehicle Button (Orange) */}
-        <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20 hover:shadow-amber-500/20 transition-all duration-150 cursor-pointer">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Add Vehicle
-        </button>
+        {canCreateVehicle && (
+          <button
+            onClick={() => setShowForm((current) => !current)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20 hover:shadow-amber-500/20 transition-all duration-150 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            {showForm ? 'Close Form' : 'Add Vehicle'}
+          </button>
+        )}
       </div>
+
+      {showForm && canCreateVehicle && (
+        <form onSubmit={handleCreateVehicle} className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm">
+          <input value={draft.regNo} onChange={(event) => setDraft({ ...draft, regNo: event.target.value })} placeholder="Registration number" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <input value={draft.nameModel} onChange={(event) => setDraft({ ...draft, nameModel: event.target.value })} placeholder="Name / model" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value })} className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50">
+            <option value="Van">Van</option>
+            <option value="Truck">Truck</option>
+            <option value="Mini">Mini</option>
+          </select>
+          <input value={draft.capacity} onChange={(event) => setDraft({ ...draft, capacity: event.target.value })} placeholder="Capacity" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <input value={draft.odometer} onChange={(event) => setDraft({ ...draft, odometer: event.target.value })} placeholder="Odometer" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <input value={draft.acqCost} onChange={(event) => setDraft({ ...draft, acqCost: event.target.value })} placeholder="Acquisition cost" className="bg-gray-950 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50" />
+          <button type="submit" className="md:col-span-3 justify-self-start px-4 py-2 rounded-xl text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white transition-all duration-150 cursor-pointer">
+            Save Vehicle
+          </button>
+        </form>
+      )}
 
       {/* Master Table */}
       <div className="bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm">
@@ -89,7 +190,15 @@ export default function VehicleRegistryPage() {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-gray-800/40">
-              {VEHICLES.map((row) => (
+              {loading ? (
+                <tr>
+                  <td className="py-6 text-gray-500" colSpan={7}>Loading vehicles from the backend...</td>
+                </tr>
+              ) : visibleVehicles.length === 0 ? (
+                <tr>
+                  <td className="py-6 text-gray-500" colSpan={7}>No vehicles found.</td>
+                </tr>
+              ) : visibleVehicles.map((row) => (
                 <tr key={row.regNo} className="hover:bg-gray-900/30">
                   <td className="py-4 font-mono font-semibold text-gray-300">{row.regNo}</td>
                   <td className="py-4 text-gray-300">{row.nameModel}</td>

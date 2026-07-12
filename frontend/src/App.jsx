@@ -1,86 +1,100 @@
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react'
+// src/App.jsx
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Show, useUser } from '@clerk/react'
 import SignInPage from './pages/SignInPage'
 import SignUpPage from './pages/SignUpPage'
 import OnboardingPage from './pages/OnboardingPage'
+import SyncPage from './pages/SyncPage'
 import DashboardPage from './pages/DashboardPage'
-import { useEffect, useState } from 'react'
-import { api } from './lib/axiosInstance'
 
-// Checks if the signed-in user has completed onboarding (has a role in our DB)
-function AuthGate({ children }) {
-  const { isSignedIn, isLoaded } = useUser()
-  const [dbUser, setDbUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return
-
-    api.get('/api/auth/me')
-      .then(res => {
-        setDbUser(res.data.user)
-        setLoading(false)
-      })
-      .catch(err => {
-        if (err.response?.status === 404) {
-          // User exists in Clerk but not in our DB yet → onboarding
-          navigate('/onboarding', { replace: true })
-        }
-        setLoading(false)
-      })
-  }, [isLoaded, isSignedIn, navigate])
-
-  if (!isLoaded || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-400 text-sm">Loading...</p>
-        </div>
+function LoadingScreen() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-950">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-400 text-sm">Loading...</p>
       </div>
-    )
-  }
-
-  return children(dbUser)
+    </div>
+  )
 }
 
 function App() {
+  // Straight off Clerk's own hook — no wrapper needed. Role lives in
+  // publicMetadata (set once, at onboarding, via POST /api/user/sync).
+  const { isLoaded, user } = useUser()
+  const isOnboarded = Boolean(user?.publicMetadata?.role)
+
   return (
     <Routes>
-      {/* Public auth routes */}
-      <Route path="/sign-in" element={
-        <>
-          <SignedIn><Navigate to="/" replace /></SignedIn>
-          <SignedOut><SignInPage /></SignedOut>
-        </>
-      } />
-      <Route path="/sign-up" element={
-        <>
-          <SignedIn><Navigate to="/" replace /></SignedIn>
-          <SignedOut><SignUpPage /></SignedOut>
-        </>
-      } />
+      {/* Public auth routes — signed-in users never see these */}
+      <Route
+        path="/sign-in"
+        element={
+          <>
+            <Show when="signed-in"><Navigate to="/" replace /></Show>
+            <Show when="signed-out"><SignInPage /></Show>
+          </>
+        }
+      />
+      <Route
+        path="/sign-up"
+        element={
+          <>
+            <Show when="signed-in"><Navigate to="/" replace /></Show>
+            <Show when="signed-out"><SignUpPage /></Show>
+          </>
+        }
+      />
 
-      {/* Onboarding — signed in but no role yet */}
-      <Route path="/onboarding" element={
-        <>
-          <SignedOut><Navigate to="/sign-in" replace /></SignedOut>
-          <SignedIn><OnboardingPage /></SignedIn>
-        </>
-      } />
+      {/* Onboarding — signed in, no role yet. Already-onboarded users get bounced to the dashboard. */}
+      <Route
+        path="/onboarding"
+        element={
+          <>
+            <Show when="signed-out"><Navigate to="/sign-in" replace /></Show>
+            <Show when="signed-in">
+              {!isLoaded ? (
+                <LoadingScreen />
+              ) : isOnboarded ? (
+                <Navigate to="/" replace />
+              ) : (
+                <OnboardingPage />
+              )}
+            </Show>
+          </>
+        }
+      />
 
-      {/* Protected app routes */}
-      <Route path="/*" element={
-        <>
-          <SignedOut><Navigate to="/sign-in" replace /></SignedOut>
-          <SignedIn>
-            <AuthGate>
-              {(dbUser) => dbUser ? <DashboardPage user={dbUser} /> : null}
-            </AuthGate>
-          </SignedIn>
-        </>
-      } />
+      <Route
+        path="/syncing"
+        element={
+          <>
+            <Show when="signed-out"><Navigate to="/sign-in" replace /></Show>
+            <Show when="signed-in">
+              {!isLoaded ? <LoadingScreen /> : <SyncPage />}
+            </Show>
+          </>
+        }
+      />
+
+      {/* Protected app — role check decides onboarding vs dashboard, no API round-trip */}
+      <Route
+        path="/*"
+        element={
+          <>
+            <Show when="signed-out"><Navigate to="/sign-in" replace /></Show>
+            <Show when="signed-in">
+              {!isLoaded ? (
+                <LoadingScreen />
+              ) : !isOnboarded ? (
+                <Navigate to="/onboarding" replace />
+              ) : (
+                <DashboardPage />
+              )}
+            </Show>
+          </>
+        }
+      />
     </Routes>
   )
 }

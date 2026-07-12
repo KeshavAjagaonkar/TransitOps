@@ -12,27 +12,45 @@ export async function getExistingUser(userId) {
 }
 
 /**
- * createUserFromOnboarding
- * Called ONCE, from POST /api/user/sync, when the onboarding form submits.
- * This is the ONLY place a User row is ever created — role is required
- * up front, so the schema can keep `role Role` (non-nullable).
- * Also mirrors the role into Clerk publicMetadata for fast frontend reads.
+ * syncUserFromClerk
+ * Keeps the local User row aligned with Clerk and creates the row on the
+ * first role-bearing onboarding submit.
  */
-export async function createUserFromOnboarding(userId, { role, name }) {
+export async function syncUserFromClerk(userId, { role, name } = {}) {
+  const clerkUser = await clerkClient.users.getUser(userId);
   const existing = await prisma.user.findUnique({ where: { id: userId } });
+  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+  const resolvedName = name || `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim();
+
   if (existing) {
-    throw { status: 400, message: "User has already completed onboarding" };
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        email,
+        name: resolvedName || existing.name,
+        imageUrl: clerkUser.imageUrl ?? null,
+        ...(role ? { role } : {}),
+      },
+    });
+
+    await clerkClient.users.updateUserMetadata(userId, {
+      publicMetadata: { role: role ?? updated.role },
+    });
+
+    return { user: updated, created: false };
   }
 
-  const clerkUser = await clerkClient.users.getUser(userId);
+  if (!role) {
+    throw { status: 409, message: "Onboarding required" };
+  }
 
   const user = await prisma.user.create({
     data: {
       id: userId,
-      email: clerkUser.emailAddresses[0]?.emailAddress ?? "",
-      name: name || `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim(),
+      email,
+      name: resolvedName || email,
       imageUrl: clerkUser.imageUrl ?? null,
-      role, // required — no null state ever exists in the DB
+      role,
     },
   });
 
@@ -40,7 +58,7 @@ export async function createUserFromOnboarding(userId, { role, name }) {
     publicMetadata: { role },
   });
 
-  return user;
+  return { user, created: true };
 }
 
 /**

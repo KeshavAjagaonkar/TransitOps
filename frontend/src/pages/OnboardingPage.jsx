@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useUser } from '@clerk/clerk-react'
+import { useUser } from '@clerk/react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/axiosInstance'
 
@@ -67,7 +67,10 @@ export default function OnboardingPage() {
     setError('')
 
     try {
-      await api.post('/api/auth/onboard', { role: selected })
+      await api.post('/user/sync', {
+        role: selected,
+        name: user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' '),
+      })
       navigate('/', { replace: true })
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Please try again.')
@@ -87,7 +90,7 @@ export default function OnboardingPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-linear-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
@@ -109,7 +112,7 @@ export default function OnboardingPage() {
               className={`
                 group relative text-left p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer
                 ${selected === role.value
-                  ? `border-transparent bg-gradient-to-br ${role.color} text-white shadow-lg shadow-indigo-500/20`
+                  ? `border-transparent bg-linear-to-br ${role.color} text-white shadow-lg shadow-indigo-500/20`
                   : `border-gray-800 bg-gray-900/60 backdrop-blur-sm text-gray-300 ${role.bgHover}`
                 }
               `}
@@ -118,7 +121,7 @@ export default function OnboardingPage() {
                 w-12 h-12 rounded-xl flex items-center justify-center mb-3
                 ${selected === role.value
                   ? 'bg-white/20'
-                  : `bg-gradient-to-br ${role.color} bg-clip-padding`
+                  : `bg-linear-to-br ${role.color} bg-clip-padding`
                 }
               `}>
                 <span className={selected === role.value ? 'text-white' : 'text-white'}>
@@ -158,7 +161,7 @@ export default function OnboardingPage() {
           className={`
             w-full py-3.5 rounded-xl font-semibold text-base transition-all duration-200
             ${selected
-              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 cursor-pointer'
+              ? 'bg-linear-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25 cursor-pointer'
               : 'bg-gray-800 text-gray-500 cursor-not-allowed'
             }
           `}

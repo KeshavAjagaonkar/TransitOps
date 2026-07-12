@@ -11,6 +11,7 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const [selectedDriver, setSelectedDriver] = useState(null)
   const [error, setError] = useState('')
 
@@ -21,6 +22,14 @@ export default function DriversPage() {
   const [licenseCategory, setLicenseCategory] = useState('LMV')
   const [licenseExpiry, setLicenseExpiry] = useState('')
   const [safetyScore, setSafetyScore] = useState('100')
+  const [editForm, setEditForm] = useState({
+    name: '',
+    contact: '',
+    licenseNo: '',
+    licenseCategory: 'LMV',
+    licenseExpiry: '',
+  })
+  const [safetyScoreInput, setSafetyScoreInput] = useState('100')
 
   const fetchDrivers = async () => {
     try {
@@ -36,6 +45,44 @@ export default function DriversPage() {
   useEffect(() => {
     fetchDrivers()
   }, [])
+
+  useEffect(() => {
+    if (selectedDriver) {
+      setSafetyScoreInput(String(selectedDriver.safetyScore ?? 100))
+    }
+  }, [selectedDriver])
+
+  const formatDateInput = (value) => {
+    if (!value) return ''
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0]
+  }
+
+  const getStatusDisplay = (status) => {
+    if (!status) return 'Available'
+    const normalized = status.toLowerCase()
+    if (normalized.includes('trip')) return 'On Trip'
+    if (normalized.includes('off')) return 'Off Duty'
+    if (normalized.includes('suspend')) return 'Suspended'
+    return 'Available'
+  }
+
+  const getStatusClass = (status) => {
+    const displayStatus = getStatusDisplay(status)
+
+    switch (displayStatus) {
+      case 'Available':
+        return 'bg-green-500/15 text-green-400 border-green-500/20'
+      case 'On Trip':
+        return 'bg-blue-500/15 text-blue-400 border-blue-500/20'
+      case 'Off Duty':
+        return 'bg-gray-500/15 text-gray-400 border-gray-500/20'
+      case 'Suspended':
+        return 'bg-red-500/15 text-red-400 border-red-500/20'
+      default:
+        return 'bg-gray-500/15 text-gray-400 border-gray-500/20'
+    }
+  }
 
   const handleAddDriver = async (e) => {
     e.preventDefault()
@@ -71,15 +118,58 @@ export default function DriversPage() {
     }
   }
 
+  const handleUpdateDriver = async (e) => {
+    e.preventDefault()
+    setError('')
+
+    if (!selectedDriver) return
+    if (!editForm.name || !editForm.contact || !editForm.licenseNo || !editForm.licenseCategory || !editForm.licenseExpiry) {
+      setError('Please fill in all required fields.')
+      return
+    }
+
+    try {
+      const res = await api.patch(`/drivers/${selectedDriver.id}`, {
+        name: editForm.name,
+        contact: editForm.contact,
+        licenseNo: editForm.licenseNo,
+        licenseCategory: editForm.licenseCategory,
+        licenseExpiry: new Date(editForm.licenseExpiry).toISOString(),
+      })
+      setShowEditModal(false)
+      setSelectedDriver(res.data)
+      fetchDrivers()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update driver record.')
+    }
+  }
+
   const handleStatusToggle = async (status) => {
     if (!selectedDriver) return
     try {
       const res = await api.patch(`/drivers/${selectedDriver.id}/status`, { status })
-      // Update selected driver state & list
       setSelectedDriver(res.data)
       fetchDrivers()
     } catch (err) {
       console.error('Error updating driver status:', err)
+    }
+  }
+
+  const handleSafetyScoreUpdate = async () => {
+    if (!selectedDriver) return
+
+    const parsedScore = Number(safetyScoreInput)
+    if (Number.isNaN(parsedScore) || parsedScore < 0 || parsedScore > 100) {
+      setError('Safety score must be between 0 and 100.')
+      return
+    }
+
+    try {
+      await api.patch(`/drivers/${selectedDriver.id}/safety-score`, { safetyScore: parsedScore })
+      setError('')
+      fetchDrivers()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update safety score.')
     }
   }
 
@@ -162,14 +252,8 @@ export default function DriversPage() {
                       ? 'text-amber-400'
                       : 'text-red-400'
 
-                  const statusColor =
-                    row.status === 'Available'
-                      ? 'bg-green-500/15 text-green-400 border-green-500/20'
-                      : row.status === 'OnTrip'
-                      ? 'bg-blue-500/15 text-blue-400 border-blue-500/20'
-                      : row.status === 'Suspended'
-                      ? 'bg-red-500/15 text-red-400 border-red-500/20'
-                      : 'bg-gray-500/15 text-gray-400 border-gray-500/20'
+                  const statusDisplay = getStatusDisplay(row.status)
+                  const statusColor = getStatusClass(row.status)
 
                   const isExpired = new Date(row.licenseExpiry) < new Date()
 
@@ -195,20 +279,39 @@ export default function DriversPage() {
                       <td className={`py-4 ${safetyColor}`}>{row.safetyScore} / 100</td>
                       <td className="py-4">
                         <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${statusColor}`}>
-                          {row.status}
+                          {statusDisplay}
                         </span>
                       </td>
                       <td className="py-4 text-right">
                         {isFleetManager ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDelete(row.id)
-                            }}
-                            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
-                          >
-                            Deactivate
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedDriver(row)
+                                setEditForm({
+                                  name: row.name,
+                                  contact: row.contact,
+                                  licenseNo: row.licenseNo,
+                                  licenseCategory: row.licenseCategory,
+                                  licenseExpiry: formatDateInput(row.licenseExpiry),
+                                })
+                                setShowEditModal(true)
+                              }}
+                              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500 hover:text-white transition-all cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDelete(row.id)
+                              }}
+                              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                            >
+                              Deactivate
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-xs text-gray-500 italic">No actions</span>
                         )}
@@ -228,19 +331,23 @@ export default function DriversPage() {
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
             Toggle Status for: <span className="text-white normal-case font-bold">{selectedDriver.name}</span>
           </p>
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <input
+              type="number"
+              min="0"
+              max="100"
+              value={safetyScoreInput}
+              onChange={(e) => setSafetyScoreInput(e.target.value)}
+              className="w-full md:w-36 bg-gray-950 border border-gray-850 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+            />
+            <button
+              onClick={handleSafetyScoreUpdate}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/25 text-amber-400 hover:bg-amber-500 hover:text-white transition-all duration-150 cursor-pointer"
+            >
+              Update Safety Score
+            </button>
+          </div>
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => handleStatusToggle('Available')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-green-500/10 border border-green-500/25 text-green-400 hover:bg-green-500 hover:text-white transition-all duration-150 cursor-pointer"
-            >
-              Available
-            </button>
-            <button
-              onClick={() => handleStatusToggle('OnTrip')}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-500/10 border border-blue-500/25 text-blue-400 hover:bg-blue-500 hover:text-white transition-all duration-150 cursor-pointer"
-            >
-              On Trip
-            </button>
             <button
               onClick={() => handleStatusToggle('OffDuty')}
               className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-500/10 border border-gray-500/25 text-gray-400 hover:bg-gray-500 hover:text-white transition-all duration-150 cursor-pointer"
@@ -261,6 +368,106 @@ export default function DriversPage() {
       <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 text-amber-500/80 text-xs leading-relaxed">
         <strong>Rule:</strong> Expired license or Suspended status → blocked from trip assignment selection list.
       </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none">
+          <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-white">Edit Driver Profile</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-500 hover:text-white transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-500/10 border border-red-500/25 text-red-400 text-xs rounded-xl text-center">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateDriver} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-xs text-gray-400 font-medium">FULL NAME *</label>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    placeholder="E.g. Alex Mercer"
+                    className="w-full bg-gray-950 border border-gray-850 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-400 font-medium">CONTACT NO. *</label>
+                  <input
+                    type="text"
+                    value={editForm.contact}
+                    onChange={(e) => setEditForm({ ...editForm, contact: e.target.value })}
+                    placeholder="E.g. 98765xxxxx"
+                    className="w-full bg-gray-950 border border-gray-850 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-400 font-medium">LICENSE NO. *</label>
+                  <input
+                    type="text"
+                    value={editForm.licenseNo}
+                    onChange={(e) => setEditForm({ ...editForm, licenseNo: e.target.value.toUpperCase() })}
+                    placeholder="E.g. DL-88213"
+                    className="w-full bg-gray-950 border border-gray-850 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-400 font-medium">CATEGORY *</label>
+                  <select
+                    value={editForm.licenseCategory}
+                    onChange={(e) => setEditForm({ ...editForm, licenseCategory: e.target.value })}
+                    className="w-full bg-gray-950 border border-gray-850 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                  >
+                    <option value="LMV">LMV (Light Motor Vehicle)</option>
+                    <option value="HMV">HMV (Heavy Motor Vehicle)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-400 font-medium">LICENSE EXPIRY *</label>
+                  <input
+                    type="date"
+                    value={editForm.licenseExpiry}
+                    onChange={(e) => setEditForm({ ...editForm, licenseExpiry: e.target.value })}
+                    className="w-full bg-gray-950 border border-gray-850 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500/50"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-amber-600 hover:bg-amber-500 text-white transition-colors cursor-pointer"
+                >
+                  Save Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showAddModal && (

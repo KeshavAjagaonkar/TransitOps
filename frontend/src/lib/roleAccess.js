@@ -40,15 +40,15 @@ const ROLE_CONFIG = {
   },
   FinancialAnalyst: {
     label: 'Financial Analyst',
-    homePath: '/',
+    homePath: '/dashboard',
     permissions: {
       canCreateVehicle: false,
       canCreateDriver: false,
       canCreateTrip: false,
       canManageDriverStatus: false,
-      canViewFleet: false,
-      canViewDrivers: false,
-      canViewTrips: false,
+      canViewFleet: true,
+      canViewDrivers: true,
+      canViewTrips: true,
     },
   },
 }

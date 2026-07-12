@@ -43,6 +43,11 @@ export async function getVehicleCostReport(req, res, next) {
       prisma.expense.findMany(),
     ]);
 
+    console.log('maintenanceLogs total rows:', maintenanceLogs.length, maintenanceLogs.slice(0, 3))
+    console.log('fuelLogs total rows:', fuelLogs.length, fuelLogs.slice(0, 3))
+    console.log('expenses total rows:', expenses.length, expenses.slice(0, 3))
+    console.log('vehicle ids:', vehicles.map(v => v.id))
+
     const rows = vehicles.map((vehicle) => {
       const vehicleMaintenance = maintenanceLogs.filter((entry) => entry.vehicleId === vehicle.id).reduce((sum, entry) => sum + entry.cost, 0);
       const vehicleFuel = fuelLogs.filter((entry) => entry.vehicleId === vehicle.id).reduce((sum, entry) => sum + entry.cost, 0);

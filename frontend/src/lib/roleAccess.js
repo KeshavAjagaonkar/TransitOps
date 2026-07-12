@@ -12,6 +12,7 @@ const ROLE_CONFIG = {
       canViewFleet: true,
       canViewDrivers: true,
       canViewTrips: true,
+      canViewCostReports: true, // added
     },
   },
   Dispatcher: {
@@ -27,6 +28,7 @@ const ROLE_CONFIG = {
       canViewFleet: false,
       canViewDrivers: false,
       canViewTrips: true,
+      canViewCostReports: false, // added
     },
   },
   SafetyOfficer: {
@@ -42,6 +44,7 @@ const ROLE_CONFIG = {
       canViewFleet: false,
       canViewDrivers: true,
       canViewTrips: false,
+      canViewCostReports: false, // added
     },
   },
   FinancialAnalyst: {
@@ -57,6 +60,7 @@ const ROLE_CONFIG = {
       canViewFleet: true,
       canViewDrivers: true,
       canViewTrips: true,
+      canViewCostReports: true, // added
     },
   },
 }

@@ -1,96 +1,128 @@
 import { useState, useEffect } from 'react'
-import { api } from '../lib/axiosInstance'
+import { useUser } from '@clerk/react'
+import { canAccess } from '../lib/roleAccess'
+import { loadDashboardKpis, loadVehicleCostReport, exportVehicleCostCsv } from '../lib/backendResources'
 
 export default function AnalyticsPage() {
-  const [costReport, setCostReport] = useState([])
-  const [kpis, setKpis] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { user } = useUser()
+  const role = user?.publicMetadata?.role
+  const canViewCostReports = canAccess(role, 'canViewCostReports')
 
-  const fetchReports = async () => {
-    try {
-      const [costRes, kpiRes] = await Promise.all([
-        api.get('/reports/reports/vehicle-costs'),
-        api.get('/reports/dashboard/kpis'),
+  const [kpis, setKpis] = useState([])
+  const [costReport, setCostReport] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    const fetchReports = async () => {
+      // Only ask for the cost report if this role is allowed to see it —
+      // otherwise we skip a request that would just 403 on the backend.
+      const [kpiData, costData] = await Promise.all([
+        loadDashboardKpis(),
+        canViewCostReports ? loadVehicleCostReport() : Promise.resolve([]),
       ])
-      setCostReport(costRes.data)
-      setKpis(kpiRes.data)
-      setLoading(false)
+
+      if (!cancelled) {
+        setKpis(kpiData)
+        setCostReport(costData)
+        setLoading(false)
+      }
+    }
+
+    fetchReports()
+    return () => { cancelled = true }
+  }, [canViewCostReports])
+
+  const handleExport = async () => {
+    setExportError('')
+    setExporting(true)
+    try {
+      await exportVehicleCostCsv()
     } catch (err) {
-      console.error('Error fetching reports:', err)
-      setLoading(false)
+      setExportError(err.response?.data?.error || 'Failed to export report.')
+    } finally {
+      setExporting(false)
     }
   }
 
-  useEffect(() => {
-    fetchReports()
-  }, [])
-
-  // Calculate Operational Cost dynamically
-  const totalOpCost = costReport.reduce((sum, item) => sum + item.totalCost, 0)
-
-  // Find fleet utilization from dashboard KPIs
-  const utilizationKpi = kpis.find(kpi => kpi.label === 'FLEET UTILIZATION')
-  const fleetUtilization = utilizationKpi ? utilizationKpi.value : '81%'
+  const totalOpCost = costReport.reduce((sum, item) => sum + (item.totalCost || 0), 0)
+  const utilizationKpi = kpis.find((kpi) => kpi.label === 'FLEET UTILIZATION')
+  const fleetUtilization = utilizationKpi ? utilizationKpi.value : '—'
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
+      <div className="flex flex-col items-center justify-center min-h-100 gap-3">
         <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
         <p className="text-gray-400 text-sm">Loading reports and analytics data...</p>
       </div>
     )
   }
 
-  // Sort and select top costliest vehicles
-  const topCostliest = [...costReport]
-    .sort((a, b) => b.totalCost - a.totalCost)
-    .slice(0, 3)
-
+  const topCostliest = [...costReport].sort((a, b) => b.totalCost - a.totalCost).slice(0, 3)
   const maxTotalCost = topCostliest[0]?.totalCost || 1
 
   return (
     <div className="space-y-8 select-none">
-      <div>
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white tracking-tight">Reports & Analytics</h1>
+        {canViewCostReports && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-900/60 border border-gray-800 text-gray-300 hover:text-white hover:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+          >
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+        )}
       </div>
+
+      {exportError && (
+        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-300 text-sm">
+          {exportError}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
-        {/* Fuel Efficiency */}
         <div className="p-6 rounded-2xl bg-gray-900/40 border border-gray-900/60 backdrop-blur-sm shadow-md space-y-2">
           <p className="text-[10px] font-bold text-gray-500 tracking-wider">FUEL EFFICIENCY</p>
           <p className="text-2xl font-bold text-white">8.4 km/l</p>
         </div>
 
-        {/* Fleet Utilization */}
         <div className="p-6 rounded-2xl bg-gray-900/40 border border-gray-900/60 backdrop-blur-sm shadow-md space-y-2">
           <p className="text-[10px] font-bold text-gray-500 tracking-wider">FLEET UTILIZATION</p>
           <p className="text-2xl font-bold text-white">{fleetUtilization}</p>
         </div>
 
-        {/* Operational Cost */}
-        <div className="p-6 rounded-2xl bg-gray-900/40 border-gray-900/60 backdrop-blur-sm shadow-md space-y-2 border-l-4 border-l-amber-600">
-          <p className="text-[10px] font-bold text-gray-500 tracking-wider">OPERATIONAL COST</p>
-          <p className="text-2xl font-bold text-amber-500">₹ {totalOpCost?.toLocaleString() || '34,070'}</p>
-        </div>
+        {canViewCostReports ? (
+          <div className="p-6 rounded-2xl bg-gray-900/40 border-gray-900/60 backdrop-blur-sm shadow-md space-y-2 border-l-4 border-l-amber-600">
+            <p className="text-[10px] font-bold text-gray-500 tracking-wider">OPERATIONAL COST</p>
+            <p className="text-2xl font-bold text-amber-500">₹ {totalOpCost.toLocaleString()}</p>
+          </div>
+        ) : (
+          <div className="p-6 rounded-2xl bg-gray-900/40 border border-gray-900/60 backdrop-blur-sm shadow-md space-y-2 opacity-50">
+            <p className="text-[10px] font-bold text-gray-500 tracking-wider">OPERATIONAL COST</p>
+            <p className="text-xs text-gray-500 italic">Restricted to Financial Analyst / Fleet Manager</p>
+          </div>
+        )}
 
-        {/* Vehicle ROI */}
         <div className="p-6 rounded-2xl bg-gray-900/40 border border-gray-900/60 backdrop-blur-sm shadow-md space-y-2">
           <p className="text-[10px] font-bold text-gray-500 tracking-wider">VEHICLE ROI</p>
           <p className="text-2xl font-bold text-white">14.2%</p>
         </div>
-
       </div>
 
-      <p className="text-xs text-gray-500 leading-normal">
-        ROI = (Revenue - (Maintenance + Fuel)) / Acquisition Cost
-      </p>
+      {canViewCostReports && (
+        <p className="text-xs text-gray-500 leading-normal">
+          ROI = (Revenue - (Maintenance + Fuel)) / Acquisition Cost
+        </p>
+      )}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Monthly Revenue Bar Chart */}
         <div className="bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm">
           <h3 className="text-md font-bold text-white mb-8">MONTHLY REVENUE</h3>
           <div className="flex items-end justify-between h-48 px-4">
@@ -106,16 +138,19 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Top Costliest Vehicles Chart */}
         <div className="bg-gray-900/40 border border-gray-900/60 rounded-2xl p-6 backdrop-blur-sm flex flex-col justify-between">
           <div>
             <h3 className="text-md font-bold text-white mb-8">TOP COSTLIEST VEHICLES</h3>
-            
-            <div className="space-y-6">
-              {topCostliest.length === 0 ? (
-                <p className="text-center text-gray-500 text-sm py-12">No cost records found.</p>
-              ) : (
-                topCostliest.map((row, index) => {
+
+            {!canViewCostReports ? (
+              <p className="text-center text-gray-500 text-sm py-12">
+                Visible to Financial Analyst and Fleet Manager roles.
+              </p>
+            ) : topCostliest.length === 0 ? (
+              <p className="text-center text-gray-500 text-sm py-12">No cost records found.</p>
+            ) : (
+              <div className="space-y-6">
+                {topCostliest.map((row, index) => {
                   const percent = Math.max(5, Math.round((row.totalCost / maxTotalCost) * 100))
                   const barColor = index === 0 ? 'bg-red-500/80' : index === 1 ? 'bg-amber-600/80' : 'bg-indigo-500/80'
 
@@ -133,18 +168,18 @@ export default function AnalyticsPage() {
                       </div>
                     </div>
                   )
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
-          <p className="text-[10px] text-gray-500 mt-8 leading-normal">
-            * Operational costs are compiled by aggregating fuel receipts, toll logs, general expenses, and closed maintenance shop logs.
-          </p>
+          {canViewCostReports && (
+            <p className="text-[10px] text-gray-500 mt-8 leading-normal">
+              * Operational costs are compiled by aggregating fuel receipts, toll logs, general expenses, and closed maintenance shop logs.
+            </p>
+          )}
         </div>
-
       </div>
-
     </div>
   )
 }

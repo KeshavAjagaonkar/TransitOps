@@ -172,3 +172,27 @@ export async function retireVehicle(vehicleId) {
   const response = await api.delete(`/vehicles/${vehicleId}`)
   return response.data
 }
+
+export async function loadVehicleCostReport() {
+  try {
+    const response = await api.get('/reports/vehicle-costs') // fixed: was /reports/reports/vehicle-costs
+    const data = response.data
+    if (Array.isArray(data)) return data
+    if (Array.isArray(data?.report)) return data.report
+    return []
+  } catch {
+    return []
+  }
+}
+
+export async function exportVehicleCostCsv() {
+  const response = await api.get('/reports/vehicle-costs/export.csv', { responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', 'vehicle-cost-report.csv')
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}

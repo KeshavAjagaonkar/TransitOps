@@ -1,121 +1,87 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react'
+import SignInPage from './pages/SignInPage'
+import SignUpPage from './pages/SignUpPage'
+import OnboardingPage from './pages/OnboardingPage'
+import DashboardPage from './pages/DashboardPage'
+import { useEffect, useState } from 'react'
+import { api } from './lib/axiosInstance'
+
+// Checks if the signed-in user has completed onboarding (has a role in our DB)
+function AuthGate({ children }) {
+  const { isSignedIn, isLoaded } = useUser()
+  const [dbUser, setDbUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+
+    api.get('/api/auth/me')
+      .then(res => {
+        setDbUser(res.data.user)
+        setLoading(false)
+      })
+      .catch(err => {
+        if (err.response?.status === 404) {
+          // User exists in Clerk but not in our DB yet → onboarding
+          navigate('/onboarding', { replace: true })
+        }
+        setLoading(false)
+      })
+  }, [isLoaded, isSignedIn, navigate])
+
+  if (!isLoaded || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-400 text-sm">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return children(dbUser)
+}
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <Routes>
+      {/* Public auth routes */}
+      <Route path="/sign-in" element={
+        <>
+          <SignedIn><Navigate to="/" replace /></SignedIn>
+          <SignedOut><SignInPage /></SignedOut>
+        </>
+      } />
+      <Route path="/sign-up" element={
+        <>
+          <SignedIn><Navigate to="/" replace /></SignedIn>
+          <SignedOut><SignUpPage /></SignedOut>
+        </>
+      } />
 
-      <div className="ticks"></div>
+      {/* Onboarding — signed in but no role yet */}
+      <Route path="/onboarding" element={
+        <>
+          <SignedOut><Navigate to="/sign-in" replace /></SignedOut>
+          <SignedIn><OnboardingPage /></SignedIn>
+        </>
+      } />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {/* Protected app routes */}
+      <Route path="/*" element={
+        <>
+          <SignedOut><Navigate to="/sign-in" replace /></SignedOut>
+          <SignedIn>
+            <AuthGate>
+              {(dbUser) => dbUser ? <DashboardPage user={dbUser} /> : null}
+            </AuthGate>
+          </SignedIn>
+        </>
+      } />
+    </Routes>
   )
 }
 

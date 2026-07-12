@@ -1,9 +1,9 @@
 
 import {Router} from "express";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import * as reportsController from "../controllers/reports-controller.js";
 
 const reportsRouter = Router();
-
 
 reportsRouter.use(authMiddleware);
  
@@ -19,6 +19,5 @@ reportsRouter.get(
   requireRole("FinancialAnalyst", "FleetManager"),
   reportsController.exportVehicleCostCsv
 );
-
 
 export default reportsRouter;

@@ -1,9 +1,9 @@
 
 import {Router} from "express";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import { fuelController, expenseController } from "../controllers/fuel-expense-controller.js";
 
 const fuelExpenseRouter = Router();
-
 
 fuelExpenseRouter.use(authMiddleware);
  
@@ -12,6 +12,5 @@ fuelExpenseRouter.post("/fuel-logs", requireRole("FleetManager", "Driver"), fuel
  
 fuelExpenseRouter.get("/expenses", expenseController.listExpenses);
 fuelExpenseRouter.post("/expenses", requireRole("FleetManager", "Driver"), expenseController.createExpense);
-
 
 export default fuelExpenseRouter;

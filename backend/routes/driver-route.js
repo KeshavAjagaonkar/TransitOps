@@ -1,6 +1,7 @@
 
 import {Router} from "express";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware, requireRole } from "../middleware/auth.js";
+import * as driverController from "../controllers/driver-controller.js";
 
 const driverRouter = Router();
 
@@ -15,7 +16,5 @@ driverRouter.post("/", requireRole("FleetManager"), driverController.createDrive
 driverRouter.patch("/:id", requireRole("FleetManager"), driverController.updateDriver);
 driverRouter.patch("/:id/status", requireRole("SafetyOfficer"), driverController.updateDriverStatus);
 driverRouter.delete("/:id", requireRole("FleetManager"), driverController.deleteDriver);
- 
-
 
 export default driverRouter;

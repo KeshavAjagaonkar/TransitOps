@@ -3,8 +3,7 @@
 // Soft deletes (deletedAt) on Vehicle & Driver to preserve Trip history.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -70,7 +69,8 @@ model User {
   id        String   @id // Clerk userId — set on insert, no auto-generate
   name      String
   email     String   @unique
-  role      Role
+  role      Role?
+  imageUrl  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

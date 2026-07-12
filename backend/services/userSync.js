@@ -1,6 +1,6 @@
 
 import { clerkClient } from "@clerk/express";
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.js";
 
 
 export async function findOrCreateUser(userId) {

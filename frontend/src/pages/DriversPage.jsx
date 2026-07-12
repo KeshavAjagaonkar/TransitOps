@@ -7,7 +7,7 @@ export default function DriversPage() {
   const role = user?.publicMetadata?.role || 'Dispatcher'
   const isFleetManager = role === 'FleetManager'
   const isSafetyOfficer = role === 'SafetyOfficer'
-  const canToggleStatus = isFleetManager || isSafetyOfficer
+  const canToggleStatus = isSafetyOfficer
   const [drivers, setDrivers] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)

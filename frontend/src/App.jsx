@@ -1,6 +1,8 @@
 // src/App.jsx
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useUser } from '@clerk/react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useUser } from '@clerk/react'
 import SignInPage from './pages/SignInPage'
 import SignUpPage from './pages/SignUpPage'
 import OnboardingPage from './pages/OnboardingPage'
@@ -9,6 +11,10 @@ import DashboardPage from './pages/DashboardPage'
 import VehicleRegistryPage from './pages/VehicleRegistryPage'
 import DriversPage from './pages/DriversPage'
 import TripsPage from './pages/TripsPage'
+import MaintenancePage from './pages/MaintenancePage'
+import FuelExpensesPage from './pages/FuelExpensesPage'
+import AnalyticsPage from './pages/AnalyticsPage'
+import SettingsPage from './pages/SettingsPage'
 import MaintenancePage from './pages/MaintenancePage'
 import FuelExpensesPage from './pages/FuelExpensesPage'
 import AnalyticsPage from './pages/AnalyticsPage'
@@ -27,6 +33,10 @@ function RoleHomeRedirect() {
 }
 
 function App() {
+  const { user } = useUser()
+  const role = user?.publicMetadata?.role
+  const roleHomePath = role ? getRoleHomePath(role) : '/dashboard'
+
   return (
     <Routes>
       <Route element={<GuestOnly />}>

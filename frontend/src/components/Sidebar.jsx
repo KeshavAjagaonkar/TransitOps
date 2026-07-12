@@ -24,7 +24,7 @@ const MENU_GROUPS = [
       {
         path: '/fleet',
         label: 'Fleet',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FleetManager', 'Dispatcher', 'FinancialAnalyst'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -35,7 +35,7 @@ const MENU_GROUPS = [
       {
         path: '/drivers',
         label: 'Drivers',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FleetManager', 'SafetyOfficer'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -45,7 +45,7 @@ const MENU_GROUPS = [
       {
         path: '/trips',
         label: 'Trips',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -55,7 +55,7 @@ const MENU_GROUPS = [
       {
         path: '/maintenance',
         label: 'Maintenance',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FleetManager'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -66,7 +66,7 @@ const MENU_GROUPS = [
       {
         path: '/fuel-expenses',
         label: 'Fuel & Expenses',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FinancialAnalyst'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -76,7 +76,7 @@ const MENU_GROUPS = [
       {
         path: '/analytics',
         label: 'Analytics',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FinancialAnalyst', 'FleetManager'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h2a2 2 0 002-2zm12 0v-3a2 2 0 00-2-2h-2a2 2 0 00-2 2v3a2 2 0 002 2h2a2 2 0 002-2zm0 0v-7a2 2 0 00-2-2h-2a2 2 0 00-2 2v9a2 2 0 002 2h2a2 2 0 002-2z" />
@@ -86,7 +86,7 @@ const MENU_GROUPS = [
       {
         path: '/settings',
         label: 'Settings',
-        roles: ['FleetManager', 'Dispatcher', 'SafetyOfficer', 'FinancialAnalyst'],
+        roles: ['FleetManager'],
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

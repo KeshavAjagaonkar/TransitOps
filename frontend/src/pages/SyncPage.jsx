@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useUser } from '@clerk/react'
+import { useUser } from '@clerk/react' 
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/axiosInstance'
 import { getRoleHomePath } from '../lib/roleAccess'
@@ -20,9 +20,19 @@ export default function SyncPage() {
         const response = await api.post('/user/sync', role ? { role } : {})
         const resolvedRole = response.data?.role
 
-        if (!cancelled) {
-          navigate(resolvedRole ? getRoleHomePath(resolvedRole) : '/onboarding', { replace: true })
+        if (cancelled) return
+
+        // Refresh Clerk's cached user object so publicMetadata.role
+        // is fresh for every other component reading useUser() —
+        // otherwise route guards elsewhere see stale metadata and
+        // bounce the user back to /onboarding right after this redirect.
+        if (resolvedRole) {
+          await user.reload()
         }
+
+        if (cancelled) return
+
+        navigate(resolvedRole ? getRoleHomePath(resolvedRole) : '/onboarding', { replace: true })
       } catch (err) {
         if (cancelled) return
 

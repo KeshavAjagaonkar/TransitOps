@@ -1,6 +1,5 @@
 import { api } from './axiosInstance'
 
-const isPlaceholderPayload = (data) => Boolean(data && typeof data === 'object' && 'message' in data)
 
 const asDateInput = (value) => {
   if (!value) return ''
@@ -151,5 +150,10 @@ export async function createTrip(payload) {
 
 export async function dispatchTrip(tripId) {
   const response = await api.post(`/trips/${tripId}/dispatch`)
+  return response.data
+}
+
+export async function retireVehicle(vehicleId) {
+  const response = await api.delete(`/vehicles/${vehicleId}`)
   return response.data
 }

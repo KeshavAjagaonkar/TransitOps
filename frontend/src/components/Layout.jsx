@@ -1,7 +1,9 @@
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
 
-export default function Layout({ children }) {
+import { Outlet } from 'react-router-dom'
+
+export default function Layout() {
   return (
     <div className="flex bg-gray-950 min-h-screen text-white font-sans antialiased overflow-x-hidden w-full">
       {/* Sidebar on Left */}
@@ -14,7 +16,7 @@ export default function Layout({ children }) {
 
         {/* Dynamic Page Content */}
         <main className="flex-1 p-8 bg-gray-950/40">
-          {children}
+           <Outlet />
         </main>
       </div>
     </div>

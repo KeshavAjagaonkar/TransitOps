@@ -1,7 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// TransitOps — Prisma Schema
+// All enums enforce valid states at the DB level.
+// Soft deletes (deletedAt) on Vehicle & Driver to preserve Trip history.
 
 generator client {
   provider = "prisma-client"
@@ -12,3 +11,186 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Enums ───────────────────────────────────────────────
+
+enum Role {
+  FleetManager
+  Dispatcher
+  SafetyOfficer
+  FinancialAnalyst
+}
+
+enum VehicleType {
+  Van
+  Truck
+  Mini
+}
+
+enum VehicleStatus {
+  Available
+  OnTrip
+  InShop
+  Retired
+}
+
+enum DriverStatus {
+  Available
+  OnTrip
+  OffDuty
+  Suspended
+}
+
+enum LicenseCategory {
+  LMV
+  HMV
+}
+
+enum TripStatus {
+  Draft
+  Dispatched
+  Completed
+  Cancelled
+}
+
+enum MaintenanceStatus {
+  Active
+  Completed
+}
+
+enum ExpenseType {
+  Toll
+  Other
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+/// id = Clerk user ID (e.g. user_2x...). No separate internal ID needed.
+/// Created on first login via sync middleware.
+model User {
+  id        String   @id       // Clerk userId — set on insert, no auto-generate
+  name      String
+  email     String   @unique
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trips Trip[]
+}
+
+model Vehicle {
+  id              String        @id @default(cuid())
+  regNo           String        @unique
+  nameModel       String
+  type            VehicleType
+  maxCapacityKg   Float
+  odometer        Float         @default(0)
+  acquisitionCost Float
+  region          String?
+  status          VehicleStatus @default(Available)
+  deletedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  trips           Trip[]
+  maintenanceLogs MaintenanceLog[]
+  fuelLogs        FuelLog[]
+  expenses        Expense[]
+
+  // Dashboard filters hit status + type + region together
+  @@index([status, type, region])
+}
+
+model Driver {
+  id              String         @id @default(cuid())
+  name            String
+  contact         String
+  licenseNo       String         @unique
+  licenseCategory LicenseCategory
+  licenseExpiry   DateTime
+  safetyScore     Int            @default(100) // 0–100, not an enum
+  status          DriverStatus   @default(Available)
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  trips Trip[]
+}
+
+/// Trip lifecycle: Draft → Dispatched → Completed | Cancelled
+/// vehicleId & driverId are null in Draft (assigned at dispatch time).
+model Trip {
+  id                 String     @id @default(cuid())
+  tripCode           String     @unique // e.g. TR-001, generated in service
+  source             String
+  destination        String
+  cargoWeightKg      Float
+  plannedDistanceKm  Float
+  actualDistanceKm   Float?     // filled on complete
+  revenue            Float?     // filled on complete
+  finalOdometer      Float?     // filled on complete
+  fuelConsumedLiters Float?     // filled on complete
+  status             TripStatus @default(Draft)
+  dispatchedAt       DateTime?
+  completedAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  vehicleId   String?
+  driverId    String?
+  createdById String
+
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+  driver    Driver?  @relation(fields: [driverId], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
+}
+
+/// Creating an Active record → Vehicle.status becomes InShop.
+/// Closing (Active → Completed) → Vehicle.status back to Available (unless Retired).
+model MaintenanceLog {
+  id          String            @id @default(cuid())
+  vehicleId   String
+  serviceType String
+  cost        Float
+  date        DateTime
+  status      MaintenanceStatus @default(Active)
+  createdAt   DateTime          @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+}
+
+/// Fuel cost is part of operationalCost and ROI formulas.
+model FuelLog {
+  id        String   @id @default(cuid())
+  vehicleId String
+  tripId    String?
+  date      DateTime
+  liters    Float
+  cost      Float
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  trip    Trip?   @relation(fields: [tripId], references: [id])
+}
+
+/// Toll/Other expenses are tracked but EXCLUDED from operationalCost & ROI.
+model Expense {
+  id        String      @id @default(cuid())
+  vehicleId String
+  tripId    String?
+  type      ExpenseType
+  amount    Float
+  date      DateTime
+  createdAt DateTime    @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  trip    Trip?   @relation(fields: [tripId], references: [id])
+}
+
+/// Singleton settings — enforce one row with id = "singleton".
+model Settings {
+  id           String @id @default("singleton")
+  depotName    String @default("TransitOps HQ")
+  currency     String @default("INR")
+  distanceUnit String @default("Kilometers")
+}

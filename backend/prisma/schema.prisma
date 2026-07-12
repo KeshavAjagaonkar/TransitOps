@@ -67,7 +67,7 @@ enum ExpenseType {
 /// id = Clerk user ID (e.g. user_2x...). No separate internal ID needed.
 /// Created on first login via sync middleware.
 model User {
-  id        String   @id       // Clerk userId — set on insert, no auto-generate
+  id        String   @id // Clerk userId — set on insert, no auto-generate
   name      String
   email     String   @unique
   role      Role
@@ -101,17 +101,17 @@ model Vehicle {
 }
 
 model Driver {
-  id              String         @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
   contact         String
-  licenseNo       String         @unique
+  licenseNo       String          @unique
   licenseCategory LicenseCategory
   licenseExpiry   DateTime
-  safetyScore     Int            @default(100) // 0–100, not an enum
-  status          DriverStatus   @default(Available)
+  safetyScore     Int             @default(100) // 0–100, not an enum
+  status          DriverStatus    @default(Available)
   deletedAt       DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   trips Trip[]
 }
@@ -125,10 +125,10 @@ model Trip {
   destination        String
   cargoWeightKg      Float
   plannedDistanceKm  Float
-  actualDistanceKm   Float?     // filled on complete
-  revenue            Float?     // filled on complete
-  finalOdometer      Float?     // filled on complete
-  fuelConsumedLiters Float?     // filled on complete
+  actualDistanceKm   Float? // filled on complete
+  revenue            Float? // filled on complete
+  finalOdometer      Float? // filled on complete
+  fuelConsumedLiters Float? // filled on complete
   status             TripStatus @default(Draft)
   dispatchedAt       DateTime?
   completedAt        DateTime?
@@ -144,8 +144,8 @@ model Trip {
   driver    Driver?  @relation(fields: [driverId], references: [id])
   createdBy User     @relation(fields: [createdById], references: [id])
 
-  fuelLogs FuelLog[]  // required by Prisma for bidirectional relation
-  expenses Expense[]  // required by Prisma for bidirectional relation
+  fuelLogs FuelLog[] // required by Prisma for bidirectional relation
+  expenses Expense[] // required by Prisma for bidirectional relation
 }
 
 /// Creating an Active record → Vehicle.status becomes InShop.
